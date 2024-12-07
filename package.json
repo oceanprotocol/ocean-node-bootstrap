@@ -1,0 +1,88 @@
+{
+    "name": "ocean-node-bootstrap",
+    "version": "0.0.1",
+    "description": "Ocean Node bootstrap",
+    "author": "Ocean Protocol Foundation",
+    "license": "Apache-2.0",
+    "type": "module",
+    "main": "index.js",
+    "bugs": {
+      "url": "https://github.com/oceanprotocol/ocean-node-bootstrap/issues"
+    },
+    "scripts": {
+      "build": "npm run clean && npm run build:tsc",
+      "build:tsc": "tsc --sourceMap",
+      "clean": "rm -rf ./dist/ ./doc/ ./.nyc_output",
+      "start": "node --max-old-space-size=28784 --trace-warnings --experimental-specifier-resolution=node dist/index.js",
+      "lint": "eslint --ignore-path .gitignore --ext .ts,.tsx . && npm run type-check",
+      "lint:fix": "eslint --ignore-path .gitignore --ext .ts,.tsx . --fix",
+      "format": "prettier --parser typescript --ignore-path .gitignore --write '**/*.{js,jsx,ts,tsx}'",
+      "type-check": "tsc --noEmit",
+      "release": "release-it --non-interactive",
+      "changelog": "auto-changelog -p"
+    },
+    "dependencies": {
+      "@chainsafe/libp2p-noise": "^15.1.0",
+      "@chainsafe/libp2p-yamux": "^6.0.2",
+      "@elastic/elasticsearch": "^8.14.0",
+      "@libp2p/autonat": "^1.1.1",
+      "@libp2p/bootstrap": "^10.1.1",
+      "@libp2p/circuit-relay-v2": "^1.1.1",
+      "@libp2p/crypto": "^4.1.5",
+      "@libp2p/dcutr": "^1.1.1",
+      "@libp2p/floodsub": "^9.1.1",
+      "@libp2p/identify": "^2.1.1",
+      "@libp2p/interface": "^1.6.0",
+      "@libp2p/interface-address-manager": "^3.0.1",
+      "@libp2p/kad-dht": "^12.1.1",
+      "@libp2p/mdns": "^10.1.1",
+      "@libp2p/peer-id": "^4.1.4",
+      "@libp2p/peer-id-factory": "^4.1.4",
+      "@libp2p/ping": "^1.1.1",
+      "@libp2p/pubsub": "^9.0.22",
+      "@libp2p/pubsub-peer-discovery": "^10.0.2",
+      "@libp2p/tcp": "^9.1.1",
+      "@libp2p/upnp-nat": "^1.2.1",
+      "@libp2p/websockets": "^8.1.1",
+      "@multiformats/multiaddr": "^10.2.0",
+      "@types/lodash.clonedeep": "^4.5.7",
+      "base58-js": "^2.0.0",
+      "dotenv": "^16.3.1",
+      "libp2p": "^1.8.0",
+      "lodash.clonedeep": "^4.5.0",
+      "stream-concat": "^1.0.0",
+      "ts-node": "^10.9.1",
+      "tsoa": "^5.1.1",
+      "uint8arrays": "^4.0.6"
+    },
+    "devDependencies": {
+      "@types/node": "^20.14.2",
+      "@typescript-eslint/eslint-plugin": "^6.8.0",
+      "@typescript-eslint/parser": "^6.8.0",
+      "auto-changelog": "^2.4.0",
+      "eslint": "^8.51.0",
+      "eslint-config-oceanprotocol": "^2.0.4",
+      "eslint-config-prettier": "^9.0.0",
+      "eslint-plugin-prettier": "^5.0.1",
+      "eslint-plugin-promise": "^6.1.1",
+      "prettier": "^3.0.3",
+      "release-it": "^17.6.0",
+      "tsx": "^3.12.8"
+    },
+    "release-it": {
+      "hooks": {
+        "after:bump": "npm run changelog"
+      },
+      "plugins": {},
+      "git": {
+        "tagName": "v${version}"
+      },
+      "github": {
+        "release": true
+      },
+      "npm": {
+        "publish": false
+      }
+    }
+  }
+  
