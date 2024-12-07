@@ -13,8 +13,10 @@ import { kadDHT, passthroughMapper } from '@libp2p/kad-dht'
 import { createFromPrivKey } from '@libp2p/peer-id-factory'
 import type { OceanNodeKeys } from './@types'
 import { keys } from '@libp2p/crypto'
+import amqp from 'amqplib'
 
 let libp2p: any
+let rabbitChannel: any = null
 
 async function start(options: any = null) {
   libp2p = await createNode()
@@ -28,35 +30,57 @@ async function start(options: any = null) {
   libp2p.addEventListener('peer:discovery', (details: any) => {
     handlePeerDiscovery(details)
   })
+  if (process.env.RABBITMQ_URL) {
+    try {
+      const connection = await amqp.connect(process.env.RABBITMQ_URL)
+      rabbitChannel = await connection.createChannel()
+      await rabbitChannel.assertQueue('discover_queue', { durable: false })
+      await rabbitChannel.prefetch(1)
+    } catch (e) {
+      console.error('Cannot connect to RabbitMQ')
+      console.error(e)
+    }
+  }
+}
+
+function notifyQueue(event: string, peerId: string, multiaddrs: any) {
+  const data = {
+    peerId: peerId.toString(),
+    event,
+    timestamp: Date.now(),
+    multiaddrs
+  }
+  // console.log('Sending to RabbitMQ:')
+  // console.log(data)
+  if (rabbitChannel) {
+    try {
+      rabbitChannel.sendToQueue('discover_queue', Buffer.from(JSON.stringify(data)))
+    } catch (e) {
+      console.error(e)
+    }
+  }
 }
 
 function handlePeerConnect(details: any) {
   if (details) {
     const peerId = details.detail
     console.debug('Connection established to:' + peerId.toString()) // Emitted when a peer has been found
-    // try {
-    //   this._libp2p.services.pubsub.connect(peerId.toString())
-    // } catch (e) {}
+    notifyQueue('connect', peerId.toString(), null) // we don't have multiaddr on connect
   }
 }
 
 function handlePeerDisconnect(details: any) {
-  const peerId = details.detail
-  console.debug('Connection closed to:' + peerId.toString()) // Emitted when a peer has been found
+  if (details) {
+    const peerId = details.detail
+    console.debug('Connection closed to:' + peerId.toString()) // Emitted when a peer has been found
+  }
 }
 
-async function handlePeerDiscovery(details: any) {
+function handlePeerDiscovery(details: any) {
   try {
     const peerInfo = details.detail
     console.debug('Discovered new peer:' + peerInfo.id.toString())
-    if (peerInfo.multiaddrs) {
-      await this._libp2p.peerStore.save(peerInfo.id, {
-        multiaddrs: peerInfo.multiaddrs
-      })
-      await this._libp2p.peerStore.patch(peerInfo.id, {
-        multiaddrs: peerInfo.multiaddrs
-      })
-    }
+    notifyQueue('discover', peerInfo.id.toString(), peerInfo.multiaddrs)
   } catch (e) {
     // no panic if it failed
     // console.error(e)
