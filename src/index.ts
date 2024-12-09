@@ -47,7 +47,7 @@ function notifyQueue(event: string, peerId: string, multiaddrs: any) {
   const data = {
     peerId: peerId.toString(),
     event,
-    timestamp: Date.now(),
+    timestamp: Math.floor(Date.now() / 1000),
     multiaddrs
   }
   // console.log('Sending to RabbitMQ:')
