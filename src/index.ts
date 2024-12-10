@@ -43,7 +43,9 @@ async function start(options: any = null) {
   }
 }
 
-function notifyQueue(event: string, peerId: string, multiaddrs: any) {
+function notifyQueue(event: string, peerId: string, addrs: any) {
+  const multiaddrs = []
+  for (const one of addrs) multiaddrs.push(one.toString())
   const data = {
     peerId: peerId.toString(),
     event,
