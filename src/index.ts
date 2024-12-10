@@ -45,15 +45,20 @@ async function start(options: any = null) {
 
 function notifyQueue(event: string, peerId: string, addrs: any) {
   const multiaddrs = []
-  for (const one in addrs) multiaddrs.push(addrs[one].toString())
+  if (addrs) {
+    for (let i = 0; i < addrs.length; i++) {
+      multiaddrs.push(addrs[i].toString())
+    }
+  }
+
   const data = {
     peerId: peerId.toString(),
     event,
     timestamp: Math.floor(Date.now() / 1000),
     multiaddrs
   }
-  // console.log('Sending to RabbitMQ:')
-  // console.log(data)
+  console.log('Sending to RabbitMQ:')
+  console.log(data)
   if (rabbitChannel) {
     try {
       rabbitChannel.sendToQueue('discover_queue', Buffer.from(JSON.stringify(data)))
