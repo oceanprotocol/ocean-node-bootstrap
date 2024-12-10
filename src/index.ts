@@ -44,6 +44,9 @@ async function start(options: any = null) {
 }
 
 function notifyQueue(event: string, peerId: string, addrs: any) {
+  console.log('Should notify')
+  console.log(peerId)
+  console.log(addrs)
   const multiaddrs = []
   if (addrs) {
     for (let i = 0; i < addrs.length; i++) {
