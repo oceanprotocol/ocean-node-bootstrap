@@ -44,9 +44,9 @@ async function start(options: any = null) {
 }
 
 function notifyQueue(event: string, peerId: string, addrs: any) {
-  console.log('Should notify')
-  console.log(peerId)
-  console.log(addrs)
+  //console.log('Should notify')
+  //console.log(peerId)
+  //console.log(addrs)
   const multiaddrs = []
   if (addrs) {
     for (let i = 0; i < addrs.length; i++) {
@@ -57,13 +57,14 @@ function notifyQueue(event: string, peerId: string, addrs: any) {
   const data = {
     peerId: peerId.toString(),
     event,
-    timestamp: Math.floor(Date.now() / 1000),
+    timestamp: new Date().getTime(),
     multiaddrs
   }
-  console.log('Sending to RabbitMQ:')
-  console.log(data)
+
   if (rabbitChannel) {
     try {
+      console.log('Sending to RabbitMQ:')
+      console.log(data)
       rabbitChannel.sendToQueue('discover_queue', Buffer.from(JSON.stringify(data)))
     } catch (e) {
       console.error(e)
