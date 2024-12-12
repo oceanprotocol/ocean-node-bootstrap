@@ -11,6 +11,7 @@ import { ping } from '@libp2p/ping'
 import { dcutr } from '@libp2p/dcutr'
 import { kadDHT, passthroughMapper } from '@libp2p/kad-dht'
 import { createFromPrivKey } from '@libp2p/peer-id-factory'
+import { peerIdFromString } from '@libp2p/peer-id'
 import type { OceanNodeKeys } from './@types'
 import { keys } from '@libp2p/crypto'
 import amqp from 'amqplib'
@@ -43,15 +44,28 @@ async function start(options: any = null) {
   }
 }
 
-function notifyQueue(event: string, peerId: string, addrs: any) {
-  //console.log('Should notify')
-  //console.log(peerId)
-  //console.log(addrs)
+async function notifyQueue(event: string, peerId: string, addrs: any) {
+  // console.log('Should notify')
+  // console.log(peerId)
+  // console.log(addrs)
   const multiaddrs = []
   if (addrs) {
     for (let i = 0; i < addrs.length; i++) {
       multiaddrs.push(addrs[i].toString())
     }
+  }
+  try {
+    const peerStoreId = peerIdFromString(peerId)
+    const peerData = await this._libp2p.peerStore.get(peerStoreId, {
+      signal: AbortSignal.timeout(2000)
+    })
+    if (peerData) {
+      for (const x of peerData.addresses) {
+        multiaddrs.push(x.multiaddr.toString())
+      }
+    }
+  } catch (e) {
+    console.error(e)
   }
 
   const data = {
