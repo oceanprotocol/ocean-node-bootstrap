@@ -56,7 +56,7 @@ async function notifyQueue(event: string, peerId: string, addrs: any) {
   }
   try {
     const peerStoreId = peerIdFromString(peerId)
-    const peerData = await this._libp2p.peerStore.get(peerStoreId, {
+    const peerData = await libp2p.peerStore.get(peerStoreId, {
       signal: AbortSignal.timeout(2000)
     })
     if (peerData) {
