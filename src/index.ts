@@ -6,7 +6,7 @@ import { tcp } from '@libp2p/tcp'
 import { webSockets } from '@libp2p/websockets'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 import { createLibp2p, Libp2p } from 'libp2p'
-import { identify } from '@libp2p/identify'
+import { identify,identifyPush } from '@libp2p/identify'
 import { ping } from '@libp2p/ping'
 import { dcutr } from '@libp2p/dcutr'
 import { kadDHT, passthroughMapper } from '@libp2p/kad-dht'
@@ -130,6 +130,7 @@ async function createNode(): Promise<Libp2p | null> {
 
     let servicesConfig = {
       identify: identify(),
+      identifyPush: identifyPush(),
       dht: kadDHT({
         allowQueryWithZeroPeers: true,
         maxInboundStreams: 100,
