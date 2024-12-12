@@ -65,7 +65,8 @@ async function notifyQueue(event: string, peerId: string, addrs: any) {
       }
     }
   } catch (e) {
-    console.error(e)
+    // it's fine if we don't find it
+    // console.error(e)
   }
 
   const data = {
