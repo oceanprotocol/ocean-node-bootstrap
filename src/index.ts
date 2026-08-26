@@ -18,10 +18,8 @@ import { keychain } from '@libp2p/keychain'
 import { http } from '@libp2p/http'
 import { tls } from '@libp2p/tls'
 import { bootstrap } from '@libp2p/bootstrap'
-import { prometheusMetrics } from '@libp2p/prometheus-metrics'
 import { LevelDatastore } from 'datastore-level'
 import { Key } from 'interface-datastore'
-import client from 'prom-client'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http'
 import amqp from 'amqplib'
@@ -176,7 +174,7 @@ const AUTO_TLS_CERTIFICATE_DATASTORE_KEY = '/libp2p/auto-tls/certificate'
  * loopback-only and deliberately not configurable: a process bound to 127.0.0.1
  * inside a container's network namespace cannot be reached through that
  * container's external interface, even via `docker run -p` - so this is what
- * keeps `/metrics` (no auth) from becoming a public unauthenticated surface by
+ * keeps the admin endpoints from becoming a public unauthenticated surface by
  * accident. Scrape it with `docker exec curl ...`, a sidecar sharing the network
  * namespace, or a reverse proxy running inside the same namespace; see README.
  */
@@ -417,21 +415,6 @@ function errorFields(e: unknown): Record<string, unknown> {
   }
   return { err: String(e) }
 }
-
-/**
- * registered before `createNode()` runs, because `prometheusMetrics()` resets the
- * global prom-client registry by default when libp2p instantiates it and this
- * gauge would otherwise be wiped the moment the node starts - hence
- * `preserveExistingMetrics: true` on that factory below. Value is 1 for DHT
- * server mode and 0 for client mode; this repo only ever runs server mode (see
- * `dhtOptions.clientMode`), so in practice this always reads 1, but it is
- * computed rather than hardcoded so a mode change would show up here too.
- */
-const dhtModeGauge = new client.Gauge({
-  name: 'ocean_bootstrap_dht_mode',
-  help: 'DHT mode as observed by this process: 1 = server, 0 = client',
-  labelNames: ['role']
-})
 
 /** `P2P_ANNOUNCE_ADDRESSES` — JSON array, same as ocean-node */
 function getAnnounceAddressesFromEnv(): string[] {
@@ -679,10 +662,7 @@ function buildReadyPayload(): { ok: boolean; body: Record<string, unknown> } {
   }
 }
 
-async function handleAdminRequest(
-  req: IncomingMessage,
-  res: ServerResponse
-): Promise<void> {
+function handleAdminRequest(req: IncomingMessage, res: ServerResponse): void {
   const url = req.url ?? '/'
   try {
     if (url === '/health') {
@@ -697,12 +677,6 @@ async function handleAdminRequest(
       res.end(JSON.stringify(body))
       return
     }
-    if (url === '/metrics') {
-      const body = await client.register.metrics()
-      res.writeHead(200, { 'content-type': client.register.contentType })
-      res.end(body)
-      return
-    }
     res.writeHead(404, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ error: 'not found' }))
   } catch (e) {
@@ -715,19 +689,17 @@ async function handleAdminRequest(
 }
 
 /**
- * bound to loopback only, deliberately - see `ADMIN_BIND_ADDRESS`. `/metrics` and
+ * bound to loopback only, deliberately - see `ADMIN_BIND_ADDRESS`. The endpoints and
  * `/health`/`/ready` carry no authentication, so the bind address is the only
  * thing standing between them and the public internet; loopback means `docker run
  * -p` cannot expose them even by operator mistake, which is judged the safer
  * default for a surface nobody asked to make public. Failure to bind is logged
- * but does not take down the p2p node - health/metrics being unavailable must
+ * but does not take down the p2p node - health being unavailable must
  * never be confused with the node itself being down.
  */
 function startAdminServer(): void {
   const server = createServer((req, res) => {
-    handleAdminRequest(req, res).catch((e) => {
-      logEvent('error', 'admin:handler-crashed', errorFields(e))
-    })
+    handleAdminRequest(req, res)
   })
   server.on('error', (e: Error) => {
     logEvent('error', 'admin:server-error', errorFields(e))
@@ -736,7 +708,7 @@ function startAdminServer(): void {
     logEvent('info', 'admin:listening', {
       host: ADMIN_BIND_ADDRESS,
       port: P2P_CONFIG.adminPort,
-      endpoints: ['/health', '/ready', '/metrics']
+      endpoints: ['/health', '/ready']
     })
   })
   adminServer = server
@@ -1525,10 +1497,9 @@ function getRoutingTableSize(): number {
   return typeof size === 'number' ? size : 0
 }
 
-/** logged on start and on every `self:peer:update`, and mirrored into /health, /ready and /metrics */
+/** logged on start and on every `self:peer:update`, and mirrored into /health and /ready */
 function logDhtMode(trigger: string): void {
   const mode = getDhtMode()
-  dhtModeGauge.set({ role: ROLE }, mode === 'server' ? 1 : 0)
   logEvent('info', 'dht:mode', {
     role: ROLE,
     mode,
@@ -1684,11 +1655,7 @@ async function createNode(datastore: LevelDatastore): Promise<Libp2p | null> {
       http: http(),
       autoTLS: autoTLS({
         autoConfirmAddress: true
-      }),
-      // registers into the same global prom-client registry `dhtModeGauge` above
-      // uses, so one /metrics call surfaces both. `preserveExistingMetrics` stops
-      // this factory's default registry reset from wiping that gauge.
-      metrics: prometheusMetrics({ preserveExistingMetrics: true })
+      })
     }
 
     // circuit-relay server on ON THE `relay` ROLE, never on `bootstrap` - this is

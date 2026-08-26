@@ -14,7 +14,7 @@ server), and which optionally publishes peer updates to RabbitMQ.
 | `BOOTSTRAP_PEERS` | no | unset | comma-separated multiaddrs of the other bootstraps to seed-mesh with - see "Seed mesh" below |
 | `P2P_MAX_CONNECTIONS` | no | `5000` (`bootstrap`) / `100` (`relay`) | connection-manager ceiling. **Drives the `nofile` requirement below** |
 | `P2P_DATASTORE_PATH` | no | `./databases/bootstrap-store` | on-disk path for the persistent datastore - see "Persistent datastore" below |
-| `P2P_ADMIN_PORT` | no | `9100` | port for `/health`, `/ready`, `/metrics` - see "Metrics, health and readiness" below |
+| `P2P_ADMIN_PORT` | no | `9100` | port for `/health` and `/ready` - see "Health and readiness" below |
 | `P2P_READY_MIN_ROUTING_TABLE_PEERS` | no | `1` | minimum DHT routing-table size for `/ready` to report ready |
 | `P2P_ANNOUNCE_PRIVATE` | no | `false` | when `true`, the DHT stops filtering private addresses out of `FIND_NODE`/`GET_PROVIDERS` responses - see "Private-address hygiene" below |
 
@@ -103,28 +103,25 @@ docker run -d \
   oceanprotocol/ocean-node-bootstrap
 ```
 
-## Metrics, health and readiness
+## Health and readiness
 
-`GET /health`, `GET /ready` and `GET /metrics` (Prometheus text exposition, via
-`@libp2p/prometheus-metrics`) are served on a **separate admin HTTP server**,
-bound to `127.0.0.1:9100` by default (`P2P_ADMIN_PORT` changes the port; the host
-is deliberately not configurable).
+`GET /health` and `GET /ready` are served on a **separate admin HTTP server**, bound
+to `127.0.0.1:9100` by default (`P2P_ADMIN_PORT` changes the port; the host is
+deliberately not configurable).
 
-**Why loopback-only:** none of these three endpoints carry authentication, so the
-bind address is the only thing standing between them and the public internet. A
-process bound to `127.0.0.1` inside a container's network namespace cannot be
-reached through that container's external interface, even via `docker run -p` -
-so this is a deliberate choice to make it impossible for an operator to expose
-`/metrics` to the internet by simply publishing a port, at the cost of that same
-port not being directly scrapable from outside the container. Reach it with one
-of:
+**Why loopback-only:** neither endpoint carries authentication, so the bind address
+is the only thing standing between them and the public internet. A process bound to
+`127.0.0.1` inside a container's network namespace cannot be reached through that
+container's external interface, even via `docker run -p` - so this is a deliberate
+choice to make it impossible for an operator to expose them by simply publishing a
+port, at the cost of that same port not being directly reachable from outside the
+container. Reach it with:
 
 ```bash
-# one-shot check from the host
-docker exec <container> wget -qO- http://127.0.0.1:9100/health
-
-# a Prometheus (or other scraper) sharing the container's network namespace
-docker run --network container:<container> prom/prometheus ...
+# one-shot check from the host. The runtime image is slim: it has no wget, curl,
+# busybox or nc, so use the node binary that is already there.
+docker exec <container> node -e \
+  "fetch('http://127.0.0.1:9100/health').then(r=>r.text()).then(t=>console.log(t))"
 ```
 
 or a reverse proxy running inside the same network namespace if you need
@@ -138,10 +135,8 @@ authenticated external access.
   server mode; the DHT routing table holds at least `P2P_READY_MIN_ROUTING_TABLE_PEERS`
   peers (default `1`). 503 otherwise, with a `checks` object showing which
   condition(s) failed.
-- **`/metrics`** - Prometheus exposition text: default Node/process metrics,
-  libp2p's own metrics (connections, DHT query time, transport dialer errors,
-  circuit-relay reservations on `ROLE=relay`, ...), and a `ocean_bootstrap_dht_mode`
-  gauge (`1` = server, `0` = client) labelled by `role`.
+
+Prometheus metrics are **not** exposed yet; that is planned separately.
 
 ## Private-address hygiene
 
