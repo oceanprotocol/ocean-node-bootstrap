@@ -17,6 +17,12 @@ server), and which optionally publishes peer updates to RabbitMQ.
 | `P2P_ADMIN_PORT` | no | `9100` | port for `/health` and `/ready` - see "Health and readiness" below |
 | `P2P_READY_MIN_ROUTING_TABLE_PEERS` | no | `1` | minimum DHT routing-table size for `/ready` to report ready |
 | `P2P_ANNOUNCE_PRIVATE` | no | `false` | when `true`, the DHT stops filtering private addresses out of `FIND_NODE`/`GET_PROVIDERS` responses - see "Private-address hygiene" below |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | unset | OTLP/HTTP base endpoint of an OpenTelemetry collector (e.g. `http://otel-collector:4318`). **Setting it is what turns telemetry on** - see "Metrics" below |
+| `TELEMETRY_ENABLED` | no | unset | master switch; set to `off` to force telemetry off even when an endpoint is configured. Any other value (or unset) leaves it on when an endpoint is set |
+| `OTEL_METRIC_EXPORT_INTERVAL` | no | `60000` | metric push interval in ms |
+| `OTEL_SERVICE_NAME` | no | `ocean-node-bootstrap` | overrides the `service.name` resource attribute |
+| `DEPLOYMENT_ENVIRONMENT` | no | `NODE_ENV` or `development` | `deployment.environment` resource attribute |
+| `OCEAN_NETWORK_LABEL` | no | unset | optional `ocean.network` resource attribute, to group fleets in a central collector |
 
 The remaining `P2P_*` connection-manager knobs (`P2P_connectionsMaxParallelDials`,
 `P2P_connectionsDialTimeout`, `P2P_MAXPEERADDRSTODIAL`,
@@ -136,7 +142,39 @@ authenticated external access.
   peers (default `1`). 503 otherwise, with a `checks` object showing which
   condition(s) failed.
 
-Prometheus metrics are **not** exposed yet; that is planned separately.
+## Metrics
+
+Metrics are exported over **OpenTelemetry**, **push-only**: the process pushes OTLP/HTTP to
+an OpenTelemetry collector at `OTEL_EXPORTER_OTLP_ENDPOINT`, which fans out to Prometheus
+(metrics) and Tempo (traces) for Grafana. There is **no `/metrics` scrape endpoint** - the
+admin server stays loopback-only `/health` + `/ready`, and this push model is exactly what
+lets a loopback-bound process still be observed. Telemetry is a **hard no-op** until
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set (and `TELEMETRY_ENABLED` is not `off`): an unconfigured
+node emits nothing and its behaviour is unchanged.
+
+The SDK is loaded via `node --import ./dist/telemetry/otel.js` (already in the `start` script
+and the Dockerfile `CMD`), before `dist/index.js`. Each process stamps a resource identity:
+`service.name` (`ocean-node-bootstrap`), `service.version`, `deployment.environment`,
+`ocean.node.role` (`bootstrap`/`relay` from `ROLE`), optional `ocean.network`, and
+`service.instance.id` = the node's **libp2p peerId** (derived from `PRIVATE_KEY`; a random
+UUID if the key is missing). Instance identity lives on the resource, never as a metric
+label - metric labels are bounded enums only (no peerId / multiaddr / IP).
+
+Instruments emitted (OTel dotted names; Prometheus mangles dots to `_` and appends `_total`
+to counters):
+
+- Counters: `ocean.p2p.peer.connect`, `ocean.p2p.peer.disconnect`, `ocean.p2p.peer.discovery`,
+  and `ocean.bootstrap.rabbitmq.published` (peer-update messages accepted by the RabbitMQ
+  discovery feed, `ROLE=bootstrap` only).
+- Observable gauges: `ocean.p2p.connections` (labels `direction`, `limited`),
+  `ocean.p2p.dht.routing_table_peers`, `ocean.p2p.dht.mode` (`1` = server, `0` = client -
+  this restores the removed `ocean_bootstrap_dht_mode`), `ocean.p2p.relay_reservations`, and
+  `ocean.p2p.dial_queue` (label `status`).
+- Plus Node runtime metrics (`@opentelemetry/instrumentation-runtime-node`: V8 heap,
+  event-loop delay, GC) and host/process metrics (`@opentelemetry/host-metrics`).
+
+A ready-to-run collector + Prometheus + Tempo + Grafana stack lives in the ocean-node repo
+under `deploy/telemetry/`; point `OTEL_EXPORTER_OTLP_ENDPOINT` at that collector.
 
 ## Private-address hygiene
 
