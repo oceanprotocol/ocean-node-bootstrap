@@ -72,4 +72,4 @@ LABEL io.oceanprotocol.bootstrap.nofile-minimum="hard limit >= P2P_MAX_CONNECTIO
       io.oceanprotocol.bootstrap.nofile-howto="--ulimit nofile=65536:65536 (docker run), ulimits.nofile (compose), LimitNOFILE on the node container runtime (kubernetes); see README.md"
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "--max-old-space-size=28784", "--trace-warnings", "--experimental-specifier-resolution=node", "dist/index.js"]
+CMD ["node", "--import", "./dist/telemetry/otel.js", "--max-old-space-size=28784", "--trace-warnings", "--experimental-specifier-resolution=node", "dist/index.js"]

@@ -27,6 +27,13 @@ import type { Channel, ChannelModel, RecoveringChannelModel } from 'amqplib'
 import { multiaddr } from '@multiformats/multiaddr'
 import ipaddr from 'ipaddr.js'
 import { createHash } from 'node:crypto'
+import {
+  p2pPeerConnect,
+  p2pPeerDisconnect,
+  p2pPeerDiscovery,
+  rabbitmqPublished
+} from './telemetry/metrics.js'
+import { registerBootstrapGauges } from './telemetry/gauges.js'
 
 /** Same defaults as ocean-node `DEFAULT_FILTER_ANNOUNCED_ADDRESSES` */
 const DEFAULT_FILTER_ANNOUNCED_ADDRESSES = [
@@ -794,6 +801,10 @@ async function start() {
     handleSelfPeerUpdate(evt)
   })
 
+  // observable-gauge callbacks over the running libp2p handle. A no-op when telemetry is
+  // unconfigured (the meter has no provider), and every probe inside is guarded.
+  registerBootstrapGauges(libp2p)
+
   if (ROLE === 'relay') {
     instrumentRelayReservations(libp2p)
     logEvent('info', 'rabbitmq:disabled', {
@@ -1244,6 +1255,15 @@ async function shutdown(signal: string): Promise<void> {
         logEvent('error', 'shutdown:datastore-close-failed', errorFields(e))
       }
     }
+    // flush the final metric batch before exit. Lazy import so the OTel SDK is never pulled
+    // into the graph from here - it is already loaded via `--import`, so this resolves from
+    // the module cache, and `shutdownTelemetry()` is a no-op when telemetry is disabled.
+    try {
+      const { shutdownTelemetry } = await import('./telemetry/otel.js')
+      await shutdownTelemetry()
+    } catch (e) {
+      logEvent('error', 'shutdown:telemetry-flush-failed', errorFields(e))
+    }
     logEvent('info', 'shutdown:complete', { signal })
   } finally {
     clearTimeout(forceExit)
@@ -1468,6 +1488,7 @@ async function notifyQueue(
     // no fingerprint recorded, so the next `peer:update` publishes this peer again
     return
   }
+  rabbitmqPublished.add(1)
   rememberFingerprint(peerId, fingerprint)
   logEvent('debug', 'queue:published', {
     peerId,
@@ -1512,6 +1533,7 @@ function handlePeerConnect(details: any) {
   if (details) {
     const peerId = details.detail
     logEvent('debug', 'peer:connect', { peerId: peerId.toString() })
+    p2pPeerConnect.add(1)
     // notifyQueue('connect', peerId.toString(), null)
   }
 }
@@ -1547,6 +1569,7 @@ function handlePeerDisconnect(details: any) {
   if (details) {
     const peerId = details.detail
     logEvent('debug', 'peer:disconnect', { peerId: peerId.toString() })
+    p2pPeerDisconnect.add(1)
   }
 }
 
@@ -1554,6 +1577,7 @@ function handlePeerDiscovery(details: any) {
   try {
     const peerInfo = details.detail
     logEvent('debug', 'peer:discovery', { peerId: peerInfo.id.toString() })
+    p2pPeerDiscovery.add(1)
 
     if (!libp2p) return
     const currentConnections = libp2p.getConnections().length
