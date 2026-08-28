@@ -18,6 +18,12 @@ function hexStringToByteArray(hexString: string): Uint8Array {
   if (hex.length % 2 !== 0) {
     throw new Error('Must have an even number of hex digits to convert to bytes')
   }
+  // `parseInt` silently accepts partial/invalid input ('1z' -> 1, 'zz' -> NaN -> 0),
+  // so validate the whole string is hex up front - a malformed PRIVATE_KEY must fail
+  // (and fall back to a random UUID) rather than derive a wrong peer ID.
+  if (hex.length > 0 && !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error('Hex string contains non-hexadecimal characters')
+  }
   const numBytes = hex.length / 2
   const byteArray = new Uint8Array(numBytes)
   for (let i = 0; i < numBytes; i++) {
