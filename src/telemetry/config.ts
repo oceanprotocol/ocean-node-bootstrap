@@ -50,7 +50,8 @@ export function telemetryConfig(env: NodeJS.ProcessEnv = process.env): Telemetry
     enabled,
     endpoint,
     serviceName: env.OTEL_SERVICE_NAME?.trim() || 'ocean-node-bootstrap',
-    serviceVersion: env.OTEL_SERVICE_VERSION?.trim() || env.npm_package_version || '0.0.0',
+    serviceVersion:
+      env.OTEL_SERVICE_VERSION?.trim() || env.npm_package_version || '0.0.0',
     environment: env.DEPLOYMENT_ENVIRONMENT || env.NODE_ENV || 'development',
     exportIntervalMs: readPositiveInt(env.OTEL_METRIC_EXPORT_INTERVAL, 60_000),
     role: env.ROLE?.trim() || 'bootstrap',
