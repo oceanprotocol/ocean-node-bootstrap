@@ -771,7 +771,8 @@ async function start() {
 
   libp2p = await createNode(store)
   if (!libp2p) {
-    return
+    logEvent('error', 'startup:aborted', { reason: 'libp2p node failed to start' })
+    process.exit(1)
   }
   logDhtMode('startup')
 
