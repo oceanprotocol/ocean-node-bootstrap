@@ -135,8 +135,14 @@ test('an identical repeat is suppressed and a changed address is not', async () 
   assert.equal(published.length, 2, 'a new address must be published')
 })
 
-test('a message the broker refused is not remembered as sent', async () => {
-  internals.setRabbitChannel({ sendToQueue: () => false })
+test('a message that never reached the broker is retried on the next update', async () => {
+  // A thrown channel/connection error is the real "not delivered" case: amqplib
+  // rejects the publish outright, so nothing is queued and it must be resent.
+  internals.setRabbitChannel({
+    sendToQueue() {
+      throw new Error('channel closed')
+    }
+  })
   const addrs = addressObjects('/ip4/1.2.3.4/tcp/9000')
   await internals.notifyQueue('update', PEER, addrs, [OCEAN_PROTOCOL])
   published = captureQueue(internals)
@@ -144,6 +150,22 @@ test('a message the broker refused is not remembered as sent', async () => {
   assert.equal(
     published.length,
     1,
-    'a dropped message must be retried on the next update'
+    'a message the broker never accepted must be retried on the next update'
   )
+})
+
+test('backpressure (a false sendToQueue) still counts as delivered and is deduplicated', async () => {
+  // amqplib returns false when its write buffer is full, but the message is still
+  // queued - so an identical follow-up update must not republish it.
+  const sent = []
+  internals.setRabbitChannel({
+    sendToQueue(queue, buffer) {
+      sent.push({ queue, payload: JSON.parse(buffer.toString('utf8')) })
+      return false
+    }
+  })
+  const addrs = addressObjects('/ip4/1.2.3.4/tcp/9000')
+  await internals.notifyQueue('update', PEER, addrs, [OCEAN_PROTOCOL])
+  await internals.notifyQueue('update', PEER, addrs, [OCEAN_PROTOCOL])
+  assert.equal(sent.length, 1, 'a message queued under backpressure must not be resent')
 })

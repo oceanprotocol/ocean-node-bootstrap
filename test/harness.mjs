@@ -8,13 +8,21 @@
  * Every anchor it edits is asserted, so if the source moves under it this fails loudly
  * instead of quietly testing something that is no longer there.
  */
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, rm, rmdir } from 'node:fs/promises'
+import { register } from 'node:module'
+import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const sourcePath = join(here, '..', 'src', 'index.ts')
+const srcDirUrl = pathToFileURL(join(here, '..', 'src') + '/').href
 const harnessDir = join(here, '.harness')
+
+// The harness artifact lives under test/.harness/, so the source's own relative
+// imports are rewritten to absolute `src/` URLs (below) and this hook maps their
+// `.js` specifiers - and the whole telemetry chain's - onto the real `.ts` files.
+register('./tsResolveHook.mjs', import.meta.url)
 
 const START_CALL = '\nawait start()'
 
@@ -77,17 +85,35 @@ export async function loadBootstrapInternals() {
   const rewritten =
     source
       .replace(TYPE_IMPORT, "import { createLibp2p } from 'libp2p'")
-      .replace(START_CALL, '\n// start() suppressed') + EXPORTS
+      .replace(START_CALL, '\n// start() suppressed')
+      // The artifact lives outside src/, so its relative imports must point back at
+      // the real source tree; the `.js` -> `.ts` mapping is handled by the resolve hook.
+      .replace(/(\bfrom\s+|\bimport\()(['"])\.\//g, `$1$2${srcDirUrl}`) + EXPORTS
   await mkdir(harnessDir, { recursive: true })
-  const target = join(harnessDir, 'bootstrap.harness.mts')
+  // `node --test` runs each test file in its own subprocess in parallel, so the
+  // artifact name is made unique per load - a shared path would let one process
+  // delete the file another is still importing.
+  const target = join(harnessDir, `bootstrap.harness.${randomUUID()}.mts`)
   await writeFile(target, rewritten, 'utf8')
-  const module = await import(pathToFileURL(target).href)
-  loaded = module.internals
-  return loaded
+  try {
+    const module = await import(pathToFileURL(target).href)
+    loaded = module.internals
+    return loaded
+  } finally {
+    // Remove the generated artifact whether the import succeeded or threw.
+    await rm(target, { force: true })
+  }
 }
 
 export async function cleanupHarness() {
-  await rm(harnessDir, { recursive: true, force: true })
+  // Each load already removes its own artifact, so only the now-empty directory is
+  // left. `rmdir` removes it only when empty, which is safe against sibling test
+  // subprocesses still using it - a recursive remove could delete their artifacts.
+  try {
+    await rmdir(harnessDir)
+  } catch {
+    // Another subprocess still has an artifact here, or the directory is already gone.
+  }
 }
 
 /** Collects everything the module publishes instead of handing it to a broker. */

@@ -1068,10 +1068,14 @@ function publishToQueue(payload: Record<string, unknown>): boolean {
     return false
   }
   try {
-    return channel.sendToQueue(RABBITMQ_QUEUE, Buffer.from(JSON.stringify(payload)), {
+    // amqplib's return value is a backpressure signal, not a delivery result: a
+    // `false` means its write buffer is full, but the message is still queued. Only
+    // a thrown channel/connection error means the message never reached the broker.
+    channel.sendToQueue(RABBITMQ_QUEUE, Buffer.from(JSON.stringify(payload)), {
       persistent: true,
       contentType: 'application/json'
     })
+    return true
   } catch (e) {
     logEvent('error', 'rabbitmq:publish-failed', {
       queue: RABBITMQ_QUEUE,
@@ -1539,24 +1543,23 @@ function handlePeerConnect(details: any) {
   }
 }
 function handlePeerUpdate(evt: any) {
-  if (evt) {
-    const { peer } = evt.detail
-    // `peer:update` also fires for tag-only changes, so this is debug rather
-    // than an info-level line per kad-dht re-tag
-    logEvent('debug', 'peer:update', {
-      peerId: peer.id.toString(),
-      protocols: peer.protocols
-    })
-    if (peer && peer.protocols && peer.protocols.includes('/ocean/nodes/1.0.0')) {
-      notifyQueue('update', peer.id.toString(), peer.addresses, peer.protocols).catch(
-        (e: unknown) => {
-          logEvent('error', 'queue:notify-failed', {
-            peerId: peer.id.toString(),
-            ...errorFields(e)
-          })
-        }
-      )
-    }
+  const peer = evt?.detail?.peer
+  if (!peer) return
+  // `peer:update` also fires for tag-only changes, so this is debug rather
+  // than an info-level line per kad-dht re-tag
+  logEvent('debug', 'peer:update', {
+    peerId: peer.id.toString(),
+    protocols: peer.protocols
+  })
+  if (peer.protocols && peer.protocols.includes('/ocean/nodes/1.0.0')) {
+    notifyQueue('update', peer.id.toString(), peer.addresses, peer.protocols).catch(
+      (e: unknown) => {
+        logEvent('error', 'queue:notify-failed', {
+          peerId: peer.id.toString(),
+          ...errorFields(e)
+        })
+      }
+    )
   }
 }
 
