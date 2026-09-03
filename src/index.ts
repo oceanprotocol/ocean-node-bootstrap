@@ -827,9 +827,11 @@ async function start() {
  * Creates the publishing channel and declares the queue. Runs as
  * the recovery `setup` hook, so it re-runs after every reconnect.
  *
- * `durable: true` is a RabbitMQ 4.x *compatibility* requirement, not just
- * hardening: `{ durable: false }` on a non-exclusive queue is rejected with
- * `541 INTERNAL_ERROR - Feature 'transient_nonexcl_queues' is deprecated`.
+ * `durable: false` matches the existing `discover_queue`, which the broker holds
+ * as transient. RabbitMQ rejects an `assertQueue` whose `durable` arg differs from
+ * a queue that already exists (`406 PRECONDITION_FAILED`), so the declaration here
+ * has to agree with the broker's current definition; migrating to a durable queue
+ * means pointing this and the consumer at a new queue name (see `RABBITMQ_QUEUE`).
  * Without the `'error'` listeners below, such a rejection arrives as an
  * unhandled `'error'` event outside any try/catch and kills the process.
  *
@@ -879,11 +881,11 @@ async function createRabbitChannel(model: ChannelModel): Promise<void> {
       }
       logEvent('warn', 'rabbitmq:channel-closed', { queue: RABBITMQ_QUEUE })
     })
-    await channel.assertQueue(RABBITMQ_QUEUE, { durable: true })
+    await channel.assertQueue(RABBITMQ_QUEUE, { durable: false })
     rabbitChannel = channel
     logEvent('info', 'rabbitmq:channel-ready', {
       queue: RABBITMQ_QUEUE,
-      durable: true
+      durable: false
     })
   } catch (e) {
     // report it here and now. This runs as amqplib's recovery `setup`
@@ -1053,9 +1055,10 @@ function scheduleRabbitRestart(): void {
  * whether amqplib accepted the frame; it does not wait for a broker ack, and
  * there is no confirm bookkeeping, backpressure gate or fan-in cap to get wrong.
  *
- * `persistent: true` is kept because it is free: a durable queue whose messages
- * are not persistent loses them all on a broker restart, which is a whole-fleet
- * gap rather than one peer.
+ * `persistent: true` is harmless but has no effect here: the queue is transient
+ * (`durable: false`), so it and its messages are gone on a broker restart anyway.
+ * It is left in place so that pointing `RABBITMQ_QUEUE` at a durable queue is the
+ * only change needed to also get message persistence.
  */
 function publishToQueue(payload: Record<string, unknown>): boolean {
   const channel = rabbitChannel
