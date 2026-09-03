@@ -1,29 +1,31 @@
 {
-    "compilerOptions": {
-      "module": "esnext",
-      "target": "ES2022",
-      "moduleResolution": "node",
-      "esModuleInterop": true,
-      "resolveJsonModule": true,
-      "noImplicitAny": true,
-      "removeComments": true,
-      "preserveConstEnums": true,
-      "sourceMap": true,
-      "allowSyntheticDefaultImports": true,
-      "outDir": "./dist/",
-      "declaration": true,
-      "declarationDir": "./dist/",
-      "ignoreDeprecations": "5.0",
-      "experimentalDecorators": true,
-      "emitDecoratorMetadata": true,
-      "allowJs": true,
-      "rootDir": "./src",
-      "skipLibCheck": true
-    },
-    "ts-node": {
-      "esm": true
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules"]
-  }
-  
+  "compilerOptions": {
+    "module": "esnext",
+    "target": "ES2022",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    // TypeScript 6 defaults `strict` to true. Unlike ocean-node, this repo is small
+    // enough to carry the whole set - including strictNullChecks and
+    // useUnknownInCatchVariables - so nothing is held back here.
+    "strict": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "./dist/",
+    "declaration": true,
+    "declarationDir": "./dist/",
+    // `moduleResolution: node` (node10) is deprecated and stops working in TypeScript 7,
+    // which is why the toolchain is held at TS 6. Migrating to `nodenext` is its own item.
+    "ignoreDeprecations": "6.0",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "allowJs": true,
+    "rootDir": "./src",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
