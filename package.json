@@ -53,7 +53,7 @@
         "@libp2p/tls": "^3.1.10",
         "@libp2p/websockets": "^10.1.21",
         "@multiformats/multiaddr": "^13.0.3",
-        "amqplib": "^2.0.1",
+        "amqplib": "^2.2.0",
         "datastore-level": "^13.0.1",
         "interface-datastore": "^10.0.1",
         "ipaddr.js": "^2.5.0",
