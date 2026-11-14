@@ -1,4 +1,4 @@
-FROM node:24.19.0-trixie@sha256:66bb8d36ae1ddd72199ed235a089904874ca4079ee517936ca3adb80506a75c1 AS builder
+FROM node:26.13.0-trixie@sha256:438603bbb5cda404b9416f0b5c8026f61501ab911760d861ec28c36b5d675725 AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     build-essential \
@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build && npm prune --omit=dev
 
 
-FROM node:24.19.0-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS runner
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS runner
 # dumb-init is the same init ocean-node's runner installs. Without an init, node is
 # PID 1: it never receives SIGTERM from `docker stop`, so the stop waits out the
 # full grace period and the container exits 137. dumb-init forwards the signal.
